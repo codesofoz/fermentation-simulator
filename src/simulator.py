@@ -1,92 +1,101 @@
 import numpy as np
 
 class BioethanolSimulator:
-    # Safe operating ranges for parameters
-    PARAMETER_LIMITS = {
-        'S0': (1, 500),      # g/L
-        'V': (0.1, 1000),    # L
-        'X0': (0.01, 10),    # g/L
-        'N': (50, 500),      # rpm
-        't': (1, 168)        # hours (1 week max)
-    }
+    # Kinetic and process parameters (literature-based)
+    Ks = 1.0            # g/L
+    Ksi = 50.0          # g/L
+    Yxs = 0.5           # g biomass/g glucose
+    Yps = 0.48          # g ethanol/g glucose
+    mu_max_base = 0.4   # 1/h
+    P_max = 90.0        # g/L
+    ethanol_density = 0.789     # g/mL = 789 g/L
+    glucose_price = 0.0003      # $/g
+    fixed_cost = 50.0           # $ per batch (fixed, does NOT scale with V)
+    power_per_L_at_400rpm = 0.001   # kW per L at 400 rpm
+    energy_cost_per_kWh = 0.08      # $ per kWh
+    cost_per_hour_per_L = 0.0004    # $ per hour per L (scalable)
 
-    def __init__(self):
-        self.params = {
-            'Ks': 5.0,      # g/L
-            'kd': 0.01,     # h^-1
-            'alpha': 0.3,   # from document
-            'beta': 0.01,   # from document
-            'Xmax': 15.0,   # from document
-            'Pmax': 80.0    # from document
-        }
-
-    def validate_inputs(self, inputs):
-        """Check if inputs are within safe limits"""
-        warnings = []
-        for param, value in inputs.items():
-            min_val, max_val = self.PARAMETER_LIMITS[param]
-            if not min_val <= value <= max_val:
-                warnings.append(f"{param}: {value} is outside recommended range ({min_val}-{max_val})")
-        return warnings
-    
     def run_simulation(self, inputs):
-        """Run simulation following the document's step-by-step scheme"""
-        S0, V, X0, N, t = inputs['S0'], inputs['V'], inputs['X0'], inputs['N'], inputs['t']
-        
-        # Step 1: Calculate maximum specific growth rate
-        mu_max = 0.203 * (N ** 0.6)
-        
-        # Step 2: Calculate specific growth rate (Monod equation)
-        mu = mu_max * (S0 / (self.params['Ks'] + S0))
-        
-        # Step 3: Estimate final biomass concentration
-        X = X0 * np.exp((mu - self.params['kd']) * t)
-        if X > self.params['Xmax']:
-            X = self.params['Xmax']
-        
-        # Step 4: Calculate average biomass
-        X_avg = (X0 + X) / 2
-        
-        # Step 5: Calculate ethanol production rate (Luedeking-Piret)
-        r_p = self.params['alpha'] * mu * X_avg + self.params['beta'] * X_avg
-        
-        # Step 6: Calculate theoretical ethanol concentration
-        P = r_p * t
-        if P > self.params['Pmax']:
-            P = self.params['Pmax']
-        
-        # Step 7: Calculate substrate consumed
-        S_consumed = (180 / 92) * P
-        
-        # Step 8: Calculate final substrate concentration
-        S_f = S0 - S_consumed
-        if S_f < 0:
-            S_f = 0
-            P = (S0 * 92) / 180  # Recalculate P based on available substrate
-        
-        # Step 9: Calculate total ethanol produced
-        P_total = P * V
-        
-        # Step 10: Estimate unit cost
-        unit_cost = inputs.get('cost', 100) / P_total if P_total > 0 else float('inf')
-        
-        # For plotting, create simple linear/exponential trends
-        time_points = np.linspace(0, t, 100)
-        results = {
+        S0, V, X0, N, t = (
+            inputs['S0'], inputs['V'], inputs['X0'], inputs['N'], inputs['t']
+        )
+
+        if any(val <= 0 for val in [S0, V, X0, N, t]):
+            raise ValueError("All input parameters must be greater than 0.")
+
+        mu_max = self.mu_max_base * (N / 400) ** 0.6
+
+        # Fixed cost is constant per batch (does NOT scale with V)
+        fixed_cost = self.fixed_cost
+        # Time-dependent cost scales with volume
+        time_cost = t * self.cost_per_hour_per_L * V
+
+        agitation_power = self.power_per_L_at_400rpm * V * (N / 400) ** 3
+        agitation_energy_kWh = agitation_power * t
+        agitation_cost = agitation_energy_kWh * self.energy_cost_per_kWh
+
+        time_points = np.linspace(0, t, int(t * 10) + 1)
+        X_total_t = np.zeros_like(time_points)
+        S_total_t = np.zeros_like(time_points)
+        P_total_t = np.zeros_like(time_points)
+        X_total_t[0] = X0 * V
+        S_total_t[0] = S0 * V
+        P_total_t[0] = 0.0
+
+        for i in range(1, len(time_points)):
+            dt = time_points[i] - time_points[i-1]
+            X_total = X_total_t[i-1]
+            S_total = S_total_t[i-1]
+            P_total = P_total_t[i-1]
+            S = S_total / V
+            P = P_total / V
+
+            substrate_inhibition = 1 / (1 + (S / self.Ksi))
+            ethanol_inhibition = max(0, 1 - (P / self.P_max))
+            mu = mu_max * (S / (self.Ks + S)) * substrate_inhibition * ethanol_inhibition
+
+            dX_total_dt = mu * X_total
+            dS_total_dt = -(1 / self.Yxs) * dX_total_dt
+            dP_total_dt = -self.Yps * dS_total_dt
+
+            if S_total + dS_total_dt * dt < 0:
+                dS_total_dt = -S_total / dt
+                dX_total_dt = self.Yxs * -dS_total_dt
+                dP_total_dt = self.Yps * -dS_total_dt
+
+            X_total_t[i] = max(X_total + dX_total_dt * dt, 0)
+            S_total_t[i] = max(S_total + dS_total_dt * dt, 0)
+            P_total_t[i] = max(P_total + dP_total_dt * dt, 0)
+
+        X_final = X_total_t[-1] / V
+        S_final = S_total_t[-1] / V
+        P_final = P_total_t[-1] / V
+
+        P_total_g = P_final * V
+        P_total_L = P_total_g / (self.ethanol_density * 1000)
+        substrate_cost = (S0 - S_final) * V * self.glucose_price
+
+        total_cost = fixed_cost + substrate_cost + agitation_cost + time_cost
+        unit_cost = total_cost / P_total_L if P_total_L > 0 else float('inf')
+
+        cost_breakdown = {
+            'Fixed cost': fixed_cost,
+            'Substrate cost': substrate_cost,
+            'Agitation energy cost': agitation_cost,
+            'Time-dependent cost': time_cost
+        }
+
+        return {
             'time': time_points,
-            'X': X0 * np.exp((mu - self.params['kd']) * time_points),  # Exponential growth
-            'S': np.linspace(S0, S_f, 100),  # Linear substrate decrease
-            'P': np.linspace(0, P, 100)      # Linear ethanol increase
+            'X': X_final,
+            'S': S_final,
+            'P': P_final,
+            'X_series': X_total_t / V,
+            'S_series': S_total_t / V,
+            'P_series': P_total_t / V,
+            'P_total_g': P_total_g,
+            'P_total_L': P_total_L,
+            'total_cost': total_cost,
+            'unit_cost': unit_cost,
+            'cost_breakdown': cost_breakdown
         }
-        # Cap X at Xmax for plotting
-        results['X'] = np.minimum(results['X'], self.params['Xmax'])
-        
-        outputs = {
-            'X_final': X,
-            'S_final': S_f,
-            'P_final': P,
-            'P_total': P_total,
-            'unit_cost': unit_cost
-        }
-        
-        return results, outputs
