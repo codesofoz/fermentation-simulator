@@ -2,14 +2,14 @@ import numpy as np
 
 class BioethanolSimulator:
     # Kinetic and process parameters (literature-based)
-    Ks = 1.0
-    Ksi = 50.0
-    Yxs = 0.5
-    Yps = 0.48
-    mu_max_base = 0.4
-    P_max = 90.0
-    ethanol_density = 0.789
-    cost_per_liter = 5.00  # $ per liter ethanol produced
+    Ks = 1.0                     # g/LAdd commentMore actions
+    Ksi = 50.0                   # g/L
+    Yxs = 0.5                    # g biomass/g glucose
+    Yps = 0.48                   # g ethanol/g glucose
+    mu_max_base = 0.4            # 1/h
+    P_max = 90.0                 # g/L
+    ethanol_density = 0.789      # g/mL = 789 g/L
+    cost_per_liter = 5.00        # $ per liter ethanol produced
 
     def run_simulation(self, inputs):
         S0, V, X0, N, t = (

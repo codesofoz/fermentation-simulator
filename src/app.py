@@ -22,7 +22,7 @@ def main():
             "Broth Volume (V, L):",
             min_value=1.0,
             max_value=500.0,
-            value=100.0,
+            value=10.0,
             step=1.0,
         )
         st.caption("Range: 10 to 500 L")
@@ -41,7 +41,7 @@ def main():
             "Impeller Speed (N, rpm):",
             min_value=100,
             max_value=400,
-            value=300,
+            value=100,
             step=10,
         )
         st.caption("Range: 100 to 400 rpm")
@@ -50,7 +50,7 @@ def main():
             "Fermentation Time (t, hrs):",
             min_value=12,
             max_value=120,
-            value=72,
+            value=12,
             step=1,
         )
         st.caption("Range: 12 to 120 hours")
