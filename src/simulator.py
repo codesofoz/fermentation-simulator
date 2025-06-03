@@ -2,18 +2,14 @@ import numpy as np
 
 class BioethanolSimulator:
     # Kinetic and process parameters (literature-based)
-    Ks = 1.0            # g/L
-    Ksi = 50.0          # g/L
-    Yxs = 0.5           # g biomass/g glucose
-    Yps = 0.48          # g ethanol/g glucose
-    mu_max_base = 0.4   # 1/h
-    P_max = 90.0        # g/L
-    ethanol_density = 0.789     # g/mL = 789 g/L
-    glucose_price = 0.0003      # $/g
-    fixed_cost = 50.0           # $ per batch (fixed, does NOT scale with V)
-    power_per_L_at_400rpm = 0.001   # kW per L at 400 rpm
-    energy_cost_per_kWh = 0.08      # $ per kWh
-    cost_per_hour_per_L = 0.0004    # $ per hour per L (scalable)
+    Ks = 1.0
+    Ksi = 50.0
+    Yxs = 0.5
+    Yps = 0.48
+    mu_max_base = 0.4
+    P_max = 90.0
+    ethanol_density = 0.789
+    cost_per_liter = 5.00  # $ per liter ethanol produced
 
     def run_simulation(self, inputs):
         S0, V, X0, N, t = (
@@ -24,15 +20,6 @@ class BioethanolSimulator:
             raise ValueError("All input parameters must be greater than 0.")
 
         mu_max = self.mu_max_base * (N / 400) ** 0.6
-
-        # Fixed cost is constant per batch (does NOT scale with V)
-        fixed_cost = self.fixed_cost
-        # Time-dependent cost scales with volume
-        time_cost = t * self.cost_per_hour_per_L * V
-
-        agitation_power = self.power_per_L_at_400rpm * V * (N / 400) ** 3
-        agitation_energy_kWh = agitation_power * t
-        agitation_cost = agitation_energy_kWh * self.energy_cost_per_kWh
 
         time_points = np.linspace(0, t, int(t * 10) + 1)
         X_total_t = np.zeros_like(time_points)
@@ -73,17 +60,9 @@ class BioethanolSimulator:
 
         P_total_g = P_final * V
         P_total_L = P_total_g / (self.ethanol_density * 1000)
-        substrate_cost = (S0 - S_final) * V * self.glucose_price
 
-        total_cost = fixed_cost + substrate_cost + agitation_cost + time_cost
-        unit_cost = total_cost / P_total_L if P_total_L > 0 else float('inf')
-
-        cost_breakdown = {
-            'Fixed cost': fixed_cost,
-            'Substrate cost': substrate_cost,
-            'Agitation energy cost': agitation_cost,
-            'Time-dependent cost': time_cost
-        }
+        # Total cost is now only based on total ethanol produced
+        total_cost = self.cost_per_liter * P_total_L
 
         return {
             'time': time_points,
@@ -95,7 +74,5 @@ class BioethanolSimulator:
             'P_series': P_total_t / V,
             'P_total_g': P_total_g,
             'P_total_L': P_total_L,
-            'total_cost': total_cost,
-            'unit_cost': unit_cost,
-            'cost_breakdown': cost_breakdown
+            'total_cost': total_cost
         }
