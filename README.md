@@ -1,6 +1,6 @@
 # 🧬 Bioethanol Fermentation Simulator
 
-![Bioethanol Fermentation Simulator](FS.jpg)
+![Bioethanol Fermentation Simulator](assets/FS.jpg)
 
 A scientific simulation tool that models the **bioethanol fermentation process**, helping researchers and students understand the relationship between input parameters and ethanol production.
 
