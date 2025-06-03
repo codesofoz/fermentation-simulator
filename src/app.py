@@ -34,7 +34,7 @@ def main():
             value=1.0,
             step=0.1,
         )
-        st.caption("Range: 0.1 to 15.0 g/L (use 10–20 for high substrate)")
+        st.caption("Range: 0.1 to 15.0 g/L")
 
     with col2:
         N = st.number_input(
@@ -53,7 +53,7 @@ def main():
             value=72,
             step=1,
         )
-        st.caption("Range: 12 to 120 hours (use 100+ for high substrate/low X₀)")
+        st.caption("Range: 12 to 120 hours")
 
     if st.button("Run Simulation"):
         if S0 <= 0 or V <= 0 or X0 <= 0 or N <= 0 or t <= 0:
@@ -73,19 +73,12 @@ def main():
 
             st.subheader("Simulation Results")
             st.markdown(f"""
-- **Final Biomass (X):** {results['X']:.2f} g/L
-- **Final Substrate (S):** {results['S']:.2f} g/L  
-- **Ethanol Concentration (P):** {results['P']:.2f} g/L
-- **Total Ethanol Produced:** {results['P_total_L']:.2f} L
-- **Total Cost:** ${results['total_cost']:.2f} per batch
-- **Unit Cost:** ${results['unit_cost']:.2f} per liter
-""")
-
-            # Tightly formatted cost breakdown
-            cost_lines = [
-                f"- **{k}:** ${v:.2f}" for k, v in results['cost_breakdown'].items()
-            ]
-            st.markdown("#### Cost Breakdown\n" + "\n".join(cost_lines))
+                - **Final Biomass (X):** {results['X']:.2f} g/L
+                - **Final Substrate (S):** {results['S']:.2f} g/L  
+                - **Ethanol Concentration (P):** {results['P']:.2f} g/L
+                - **Total Ethanol Produced:** {results['P_total_L']:.2f} L
+                - **Total Cost:** ${results['total_cost']:.2f}
+                """)
 
             # Create plots with a dark theme
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), facecolor='#1e1e1e')
